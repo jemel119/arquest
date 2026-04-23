@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "803306318523",
+    "project_id": "ar-quest-e0a1a",
+    "storage_bucket": "ar-quest-e0a1a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:803306318523:android:530646e5f92da9bffc579e",
+        "android_client_info": {
+          "package_name": "com.android.arquest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7opqMzk7vcHJDSJeO2bQt5fJ4sTGpqIo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:803306318523:android:9f320b6fa922e4cefc579e",
+        "android_client_info": {
+          "package_name": "com.example.arquest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7opqMzk7vcHJDSJeO2bQt5fJ4sTGpqIo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
