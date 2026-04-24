@@ -87,7 +87,6 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
   }
 
   void _onClueDiscovered(ClueModel clue) {
-    // Award points for finding the clue
     final cluePoints =
         (widget.quest.pointValue / widget.clues.length).round();
     setState(() => _score += cluePoints);
@@ -105,7 +104,6 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              // Navigate to AR photo screen to capture proof
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -131,6 +129,7 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
       setState(() {
         _currentClueIndex++;
         _clueFound = false;
+        // Reset clue timer for the next clue
         _clueStartTime = DateTime.now();
       });
     }
@@ -139,21 +138,23 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
   void _onQuestComplete() {
     _positionStream?.cancel();
 
-    final completionTime =
-        DateTime.now().difference(_questStartTime).inSeconds;
+    // Use the last clue's completion time for the difficulty recommendation.
+    // This reflects the player's most recent skill level more accurately
+    // than total quest time, which includes all previous clues.
+    final lastClueTime =
+        DateTime.now().difference(_clueStartTime).inSeconds;
 
     final recommendation = _difficultyService.recommendNextDifficulty(
-      recentCompletionTimeSeconds: completionTime,
+      recentCompletionTimeSeconds: lastClueTime,
       missedAttempts: _missedAttempts,
       currentDifficulty: widget.quest.difficultyLevel,
     );
 
     final reason = _difficultyService.getRecommendationReason(
-      recentCompletionTimeSeconds: completionTime,
+      recentCompletionTimeSeconds: lastClueTime,
       missedAttempts: _missedAttempts,
     );
 
-    // Update Firestore score and leaderboard
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final displayName =
         FirebaseAuth.instance.currentUser!.displayName ?? 'Player';
@@ -167,7 +168,7 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
         title: const Text('Quest Complete!'),
         content: Text(
           'Final Score: $_score pts\n'
-          'Time: ${(completionTime / 60).toStringAsFixed(1)} min\n\n'
+          'Total Time: ${DateTime.now().difference(_questStartTime).inMinutes} min\n\n'
           '$reason\n'
           'Recommended next: $recommendation difficulty',
         ),
@@ -184,13 +185,14 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
     );
   }
 
-  // Manual "I give up on this clue" — counts as a missed attempt
   void _skipClue() {
     setState(() {
       _missedAttempts++;
       if (_currentClueIndex + 1 < widget.clues.length) {
         _currentClueIndex++;
         _clueFound = false;
+        // Reset clue timer on skip so skipped clues don't
+        // inflate the time measurement for the next clue
         _clueStartTime = DateTime.now();
       } else {
         _onQuestComplete();
@@ -240,7 +242,7 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
           children: [
             // ── Progress ────────────────────────────────────────
             LinearProgressIndicator(
-              value: (_currentClueIndex) / widget.clues.length,
+              value: _currentClueIndex / widget.clues.length,
             ),
             const SizedBox(height: 8),
             Text(
@@ -259,9 +261,11 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
                   children: [
                     const Icon(Icons.search, size: 40),
                     const SizedBox(height: 8),
-                    const Text('Current Hint',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
+                    const Text(
+                      'Current Hint',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       currentClue.hintText,
@@ -293,10 +297,12 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
                     if (_currentPosition == null)
                       const Text('Acquiring GPS...')
                     else if (_clueFound)
-                      const Text('Clue found!',
-                          style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold))
+                      const Text(
+                        'Clue found!',
+                        style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold),
+                      )
                     else
                       Text(
                         distanceToClue != null
