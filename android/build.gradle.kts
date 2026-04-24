@@ -1,3 +1,10 @@
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("com.google.gms.google-services") // add this if not already there
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
 allprojects {
     repositories {
         google()
