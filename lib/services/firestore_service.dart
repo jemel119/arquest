@@ -61,16 +61,21 @@ class FirestoreService {
         .set(clue.toMap());
   }
 
+  // Fetches clues without orderBy to avoid composite index requirement.
+  // Sorting is done in Dart after fetching — safe since clue counts are small.
   Stream<List<ClueModel>> getCluesOrdered(String questId) {
     return _db
         .collection('quests')
         .doc(questId)
         .collection('clues')
-        .orderBy('orderIndex')
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => ClueModel.fromFirestore(d.data(), d.id))
-            .toList());
+        .map((snap) {
+          final clues = snap.docs
+              .map((d) => ClueModel.fromFirestore(d.data(), d.id))
+              .toList();
+          clues.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+          return clues;
+        });
   }
 
   // ── DISCOVERIES ────────────────────────────────────────────────────────────
