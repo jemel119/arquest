@@ -48,7 +48,6 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
 
   @override
   void dispose() {
-    // Always cancel the stream to prevent memory leaks
     _positionStream?.cancel();
     super.dispose();
   }
@@ -129,18 +128,14 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
       setState(() {
         _currentClueIndex++;
         _clueFound = false;
-        // Reset clue timer for the next clue
         _clueStartTime = DateTime.now();
       });
     }
   }
 
-  void _onQuestComplete() {
+  Future<void> _onQuestComplete() async {
     _positionStream?.cancel();
 
-    // Use the last clue's completion time for the difficulty recommendation.
-    // This reflects the player's most recent skill level more accurately
-    // than total quest time, which includes all previous clues.
     final lastClueTime =
         DateTime.now().difference(_clueStartTime).inSeconds;
 
@@ -158,8 +153,13 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final displayName =
         FirebaseAuth.instance.currentUser!.displayName ?? 'Player';
-    _firestoreService.incrementScore(uid, _score);
-    _firestoreService.updateLeaderboard(uid, displayName, _score);
+
+    // Update score, leaderboard, and mark quest as completed
+    await _firestoreService.incrementScore(uid, _score);
+    await _firestoreService.updateLeaderboard(uid, displayName, _score);
+    await _firestoreService.markQuestCompleted(uid, widget.quest.id);
+
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -175,10 +175,13 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // close dialog
-              Navigator.pop(context); // back to quest list
+              // Pop all screens back to home
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/home',
+                (route) => false,
+              );
             },
-            child: const Text('Done'),
+            child: const Text('Back to Home'),
           ),
         ],
       ),
@@ -191,8 +194,6 @@ class _ARHuntScreenState extends State<ARHuntScreen> {
       if (_currentClueIndex + 1 < widget.clues.length) {
         _currentClueIndex++;
         _clueFound = false;
-        // Reset clue timer on skip so skipped clues don't
-        // inflate the time measurement for the next clue
         _clueStartTime = DateTime.now();
       } else {
         _onQuestComplete();

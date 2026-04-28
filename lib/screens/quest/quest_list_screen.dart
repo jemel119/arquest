@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../../providers/quest_provider.dart';
 import '../../widgets/quest_card.dart';
+import '../../services/firestore_service.dart';
 import 'quest_detail_screen.dart';
 
 class QuestListScreen extends StatefulWidget {
@@ -12,13 +14,39 @@ class QuestListScreen extends StatefulWidget {
 }
 
 class _QuestListScreenState extends State<QuestListScreen> {
+  final _firestoreService = FirestoreService();
+  List<String> _completedQuestIds = [];
+  bool _completedLoaded = true;
+
   @override
   void initState() {
     super.initState();
-    // Start listening to published quests from Firestore
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<QuestProvider>().listenToQuests();
     });
+    _listenToCompletedQuests();
+  }
+
+  void _listenToCompletedQuests() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      setState(() => _completedLoaded = true);
+      return;
+    }
+    _firestoreService.getCompletedQuestIds(uid).listen(
+      (ids) {
+        if (mounted) {
+          setState(() {
+            _completedQuestIds = ids;
+            _completedLoaded = true;
+          });
+        }
+      },
+      onError: (_) {
+        // If stream errors unblock taps so app never freezes
+        if (mounted) setState(() => _completedLoaded = true);
+      },
+    );
   }
 
   @override
@@ -85,14 +113,55 @@ class _QuestListScreenState extends State<QuestListScreen> {
               itemCount: questProvider.quests.length,
               itemBuilder: (ctx, i) {
                 final quest = questProvider.quests[i];
-                return QuestCard(
-                  quest: quest,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => QuestDetailScreen(quest: quest),
+                final isCompleted =
+                    _completedQuestIds.contains(quest.id);
+
+                return Stack(
+                  children: [
+                    QuestCard(
+                      quest: quest,
+                      isCompleted: isCompleted,
+                      onTap: !_completedLoaded
+                          ? () {}
+                          : () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => QuestDetailScreen(
+                                    quest: quest,
+                                    isCompleted: isCompleted,
+                                  ),
+                                ),
+                              ),
                     ),
-                  ),
+                    if (isCompleted)
+                      Positioned(
+                        top: 12,
+                        right: 20,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle,
+                                  color: Colors.white, size: 14),
+                              SizedBox(width: 4),
+                              Text(
+                                'Completed',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),

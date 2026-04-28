@@ -1,12 +1,12 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
 import '../../models/quest_model.dart';
 import '../../models/clue_model.dart';
 import '../../models/discovery_model.dart';
-import '../../services/storage_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/location_service.dart';
 import 'package:uuid/uuid.dart';
@@ -28,38 +28,35 @@ class ARPhotoScreen extends StatefulWidget {
 }
 
 class _ARPhotoScreenState extends State<ARPhotoScreen> {
-  final _storageService = StorageService();
   final _firestoreService = FirestoreService();
   final _locationService = LocationService();
 
-  File? _selectedPhoto;
+  XFile? _selectedPhoto;
   bool _isUploading = false;
 
-  Future<void> _takePhoto() async {
+  Future<void> _pickPhoto(ImageSource source) async {
     final picker = ImagePicker();
     final xfile = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 75, // compress to reduce upload size
+      source: source,
+      imageQuality: 75,
     );
     if (xfile == null) return;
-    setState(() => _selectedPhoto = File(xfile.path));
+    setState(() => _selectedPhoto = xfile);
   }
 
   Future<void> _submitPhoto() async {
     if (_selectedPhoto == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Take a photo first.')),
+        const SnackBar(content: Text('Select a photo first.')),
       );
       return;
     }
 
-    // Get GPS position at the moment of submission
     final position = await _locationService.getCurrentPosition();
     if (position == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('GPS required for discovery proof. Please enable location.')),
+        const SnackBar(content: Text('GPS required for discovery proof.')),
       );
       return;
     }
@@ -68,14 +65,16 @@ class _ARPhotoScreenState extends State<ARPhotoScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
 
-      // 1. Upload photo to Firebase Storage
-      final photoUrl = await _storageService.uploadDiscoveryPhoto(
-        userId: uid,
-        questId: widget.quest.id,
-        photo: _selectedPhoto!,
+      // Use bytes instead of File — works on both web and Android
+      final bytes = await _selectedPhoto!.readAsBytes();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final ref = FirebaseStorage.instance.ref(
+        'discoveries/$uid/${widget.quest.id}/$timestamp.jpg',
       );
 
-      // 2. Write proof metadata to Firestore discoveries collection
+      await ref.putData(bytes);
+      final photoUrl = await ref.getDownloadURL();
+
       final discovery = DiscoveryModel(
         id: const Uuid().v4(),
         userId: uid,
@@ -89,8 +88,6 @@ class _ARPhotoScreenState extends State<ARPhotoScreen> {
       await _firestoreService.saveDiscovery(discovery);
 
       if (!mounted) return;
-
-      // 3. Notify parent screen to advance to the next clue
       widget.onPhotoSubmitted();
       Navigator.pop(context);
     } catch (e) {
@@ -118,13 +115,14 @@ class _ARPhotoScreenState extends State<ARPhotoScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Clue Info ────────────────────────────────────────
+            // ── Clue Info ─────────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   children: [
-                    const Icon(Icons.emoji_events, size: 36, color: Colors.orange),
+                    const Icon(Icons.emoji_events,
+                        size: 36, color: Colors.orange),
                     const SizedBox(height: 8),
                     const Text(
                       'You found it!',
@@ -144,15 +142,24 @@ class _ARPhotoScreenState extends State<ARPhotoScreen> {
 
             const SizedBox(height: 24),
 
-            // ── Photo Preview ────────────────────────────────────
+            // ── Photo Preview ─────────────────────────────────────
             Expanded(
               child: _selectedPhoto != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.file(
-                        _selectedPhoto!,
-                        fit: BoxFit.cover,
-                      ),
+                  ? FutureBuilder<Uint8List>(
+                      future: _selectedPhoto!.readAsBytes(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData) {
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.memory(
+                              snapshot.data!,
+                              fit: BoxFit.cover,
+                            ),
+                          );
+                        }
+                        return const Center(
+                            child: CircularProgressIndicator());
+                      },
                     )
                   : Container(
                       decoration: BoxDecoration(
@@ -166,7 +173,7 @@ class _ARPhotoScreenState extends State<ARPhotoScreen> {
                             Icon(Icons.camera_alt,
                                 size: 48, color: Colors.grey),
                             SizedBox(height: 8),
-                            Text('No photo taken yet',
+                            Text('No photo selected yet',
                                 style: TextStyle(color: Colors.grey)),
                           ],
                         ),
@@ -176,18 +183,38 @@ class _ARPhotoScreenState extends State<ARPhotoScreen> {
 
             const SizedBox(height: 16),
 
-            // ── Buttons ──────────────────────────────────────────
-            ElevatedButton.icon(
-              onPressed: _isUploading ? null : _takePhoto,
-              icon: const Icon(Icons.camera_alt),
-              label: Text(
-                  _selectedPhoto == null ? 'Take Photo' : 'Retake Photo'),
+            // ── Camera / Gallery Buttons ──────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isUploading
+                        ? null
+                        : () => _pickPhoto(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Camera'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isUploading
+                        ? null
+                        : () => _pickPhoto(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library),
+                    label: const Text('Gallery'),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
+
+            // ── Submit Button ─────────────────────────────────────
             _isUploading
                 ? const Center(child: CircularProgressIndicator())
                 : ElevatedButton.icon(
-                    onPressed: _selectedPhoto != null ? _submitPhoto : null,
+                    onPressed:
+                        _selectedPhoto != null ? _submitPhoto : null,
                     icon: const Icon(Icons.cloud_upload),
                     label: const Text('Submit Discovery'),
                     style: ElevatedButton.styleFrom(

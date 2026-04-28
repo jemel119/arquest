@@ -5,11 +5,13 @@ import 'difficulty_badge.dart';
 class QuestCard extends StatelessWidget {
   final QuestModel quest;
   final VoidCallback onTap;
+  final bool isCompleted;
 
   const QuestCard({
     super.key,
     required this.quest,
     required this.onTap,
+    this.isCompleted = false,
   });
 
   @override
@@ -17,6 +19,7 @@ class QuestCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
+      color: isCompleted ? Colors.grey[100] : null,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -30,9 +33,10 @@ class QuestCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       quest.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
+                        color: isCompleted ? Colors.grey : null,
                       ),
                     ),
                   ),
@@ -47,7 +51,8 @@ class QuestCard extends StatelessWidget {
                 quest.description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(
+                    color: isCompleted ? Colors.grey[400] : Colors.grey),
               ),
 
               const SizedBox(height: 12),
@@ -55,7 +60,8 @@ class QuestCard extends StatelessWidget {
               // ── Footer ─────────────────────────────────────────
               Row(
                 children: [
-                  const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                  const Icon(Icons.location_on,
+                      size: 14, color: Colors.grey),
                   const SizedBox(width: 4),
                   Text(
                     '${quest.totalClues} clues',
@@ -63,20 +69,33 @@ class QuestCard extends StatelessWidget {
                         fontSize: 12, color: Colors.grey),
                   ),
                   const Spacer(),
-                  const Icon(Icons.star, size: 14, color: Colors.orange),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${quest.pointValue} pts',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange,
+                  if (isCompleted)
+                    const Row(
+                      children: [
+                        Icon(Icons.lock, size: 14, color: Colors.grey),
+                        SizedBox(width: 4),
+                        Text(
+                          'View only',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    const Icon(Icons.star, size: 14, color: Colors.orange),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${quest.pointValue} pts',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
 
-              // ── Tags ───────────────────────────────────────────
               if (quest.tags.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(

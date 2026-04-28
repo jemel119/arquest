@@ -121,8 +121,7 @@ class _QuestCreateScreenState extends State<QuestCreateScreen> {
         questId: _questId!,
         orderIndex: _clues.length,
         hintText: _hintController.text.trim(),
-        targetLocation:
-            GeoPoint(position.latitude, position.longitude),
+        targetLocation: GeoPoint(position.latitude, position.longitude),
         proximityRadius: 15.0,
       );
 
@@ -130,11 +129,14 @@ class _QuestCreateScreenState extends State<QuestCreateScreen> {
       setState(() => _clues.add(clue));
       _hintController.clear();
 
+      // Auto-publish as soon as first clue is added
+      await _firestoreService.publishQuest(_questId!);
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
-                'Clue ${_clues.length} added at your current location.')),
+                'Clue ${_clues.length} added. Quest is live!')),
       );
     } catch (e) {
       if (!mounted) return;

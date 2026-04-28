@@ -30,11 +30,14 @@ class FirestoreService {
     return _db
         .collection('quests')
         .where('isPublished', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => QuestModel.fromFirestore(d.data(), d.id))
-            .toList());
+        .map((snap) {
+          final quests = snap.docs
+              .map((d) => QuestModel.fromFirestore(d.data(), d.id))
+              .toList();
+          quests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return quests;
+        });
   }
 
   Future<QuestModel?> getQuestById(String questId) async {
@@ -48,6 +51,31 @@ class FirestoreService {
         .collection('quests')
         .doc(questId)
         .update({'isPublished': true});
+  }
+
+  // ── COMPLETED QUESTS ───────────────────────────────────────────────────────
+
+  // Mark a quest as completed by the current user
+  Future<void> markQuestCompleted(String uid, String questId) async {
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('completedQuests')
+        .doc(questId)
+        .set({
+      'questId': questId,
+      'completedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // Returns a stream of quest IDs the user has completed
+  Stream<List<String>> getCompletedQuestIds(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('completedQuests')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => d.id).toList());
   }
 
   // ── CLUES ──────────────────────────────────────────────────────────────────
@@ -120,8 +148,6 @@ class FirestoreService {
 
   DocumentSnapshot? _lastDocument;
 
-  // Fetches quests in pages of 10 using cursor pagination.
-  // Call repeatedly to load more — resets when _lastDocument is null.
   Future<List<QuestModel>> getQuestPage() async {
     Query query = _db
         .collection('quests')
@@ -136,11 +162,11 @@ class FirestoreService {
     final snap = await query.get();
     if (snap.docs.isNotEmpty) _lastDocument = snap.docs.last;
     return snap.docs
-        .map((d) => QuestModel.fromFirestore(d.data() as Map<String, dynamic>, d.id))
+        .map((d) =>
+            QuestModel.fromFirestore(d.data() as Map<String, dynamic>, d.id))
         .toList();
   }
 
-  // Reset pagination cursor — call this when refreshing the list from scratch.
   void resetPagination() {
     _lastDocument = null;
   }
