@@ -115,4 +115,33 @@ class FirestoreService {
         .snapshots()
         .map((snap) => snap.docs.map((d) => d.data()).toList());
   }
+
+  // ── PAGINATION ─────────────────────────────────────────────────────────────
+
+  DocumentSnapshot? _lastDocument;
+
+  // Fetches quests in pages of 10 using cursor pagination.
+  // Call repeatedly to load more — resets when _lastDocument is null.
+  Future<List<QuestModel>> getQuestPage() async {
+    Query query = _db
+        .collection('quests')
+        .where('isPublished', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(10);
+
+    if (_lastDocument != null) {
+      query = query.startAfterDocument(_lastDocument!);
+    }
+
+    final snap = await query.get();
+    if (snap.docs.isNotEmpty) _lastDocument = snap.docs.last;
+    return snap.docs
+        .map((d) => QuestModel.fromFirestore(d.data() as Map<String, dynamic>, d.id))
+        .toList();
+  }
+
+  // Reset pagination cursor — call this when refreshing the list from scratch.
+  void resetPagination() {
+    _lastDocument = null;
+  }
 }

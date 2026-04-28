@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart' as app_auth;
@@ -9,8 +10,6 @@ import 'screens/auth/register_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'services/notification_service.dart';
 
-// Global key so NotificationService can show snackbars
-// from outside the widget tree (foreground FCM messages).
 final GlobalKey<ScaffoldMessengerState> messengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
@@ -19,6 +18,12 @@ void main() async {
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Enable Firestore offline persistence before runApp
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
   runApp(
@@ -63,8 +68,6 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-  // Track which uid we last initialized FCM for so we
-  // don't call initialize() on every rebuild.
   String? _initializedForUid;
 
   @override
@@ -73,7 +76,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     final user = authProvider.currentUser;
 
     if (user != null) {
-      // Only initialize FCM once per user session, not on every rebuild.
       if (_initializedForUid != user.uid) {
         _initializedForUid = user.uid;
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -86,7 +88,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const HomeScreen();
     }
 
-    // Reset so FCM re-initializes if a different user signs in.
     _initializedForUid = null;
     return const LoginScreen();
   }
